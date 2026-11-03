@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS push_subs(id SERIAL PRIMARY KEY, user_id INT REFERENC
 CREATE TABLE IF NOT EXISTS sent(user_id INT, ref TEXT, PRIMARY KEY(user_id, ref));
 CREATE TABLE IF NOT EXISTS kv(k TEXT PRIMARY KEY, v TEXT);
 CREATE TABLE IF NOT EXISTS usage(id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id) ON DELETE CASCADE, app TEXT, day DATE, minutes INT, UNIQUE(user_id, app, day));`);
+await q(`ALTER TABLE type_rules ADD COLUMN IF NOT EXISTS place TEXT;
+CREATE TABLE IF NOT EXISTS route_cache(key TEXT PRIMARY KEY, data JSONB, at TIMESTAMPTZ DEFAULT now());`);
 
 const oauth = () => new google.auth.OAuth2(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, `${BASE_URL}/auth/callback`);
 const app = express();
@@ -129,7 +131,7 @@ app.post('/api/sync', auth, async (req, res) => {
           if (e.status === 'cancelled' || !e.start) continue;
           const allDay = !e.start.dateTime;
           await q(`INSERT INTO events(user_id,google_id,title,start_at,end_at,source,cal,all_day,location) VALUES($1,$2,$3,$4,$5,'calendar',$6,$7,$8)
-            ON CONFLICT(user_id,google_id) DO UPDATE SET title=$3,start_at=$4,end_at=$5,cal=$6,all_day=$7,location=$8`,
+            ON CONFLICT(user_id,google_id) DO UPDATE SET title=$3,start_at=$4,end_at=$5,cal=$6,all_day=$7,location=COALESCE($8, events.location)`,
             [req.uid, `${k.id}:${e.id}`, e.summary || '(sin título)', e.start.dateTime || `${e.start.date}T12:00:00Z`,
              e.end?.dateTime || null, k.summaryOverride || k.summary, allDay, e.location || null]);
           out.events++;
@@ -178,7 +180,7 @@ app.post('/api/sync', auth, async (req, res) => {
         out.mails++;
       }));
     } catch (e) { console.error('correo:', e.message); out.warnings.push('correo: ' + e.message.slice(0, 140)); }
-    await q('UPDATE events e SET kind=r.kind FROM type_rules r WHERE e.user_id=r.user_id AND e.title=r.title AND e.user_id=$1', [req.uid]);
+    await q('UPDATE events e SET kind=COALESCE(r.kind,e.kind), location=COALESCE(e.location,r.place) FROM type_rules r WHERE e.user_id=r.user_id AND e.title=r.title AND e.user_id=$1', [req.uid]);
     res.json(out);
   } catch (e) { console.error(e); res.status(500).json({ error: 'sync_failed' }); }
 });
@@ -271,6 +273,13 @@ async function tick() {
         `En media hora: «${e.title}». Respira hondo, ya casi.`,
         `«${e.title}» empieza a las ${hhmm(e.start_at, u.tz)}. Hay tiempo para un vaso de agua.`,
         `Aviso con cariño: «${e.title}» a las ${hhmm(e.start_at, u.tz)}.`]));
+    // c) hora de salir: usa la ruta guardada para avisarte unos minutos antes
+    const [me] = await q('SELECT home,campus FROM users WHERE id=$1', [u.id]);
+    if (me?.home) for (const e of await q(`SELECT id,title,start_at,location,kind,cal FROM events WHERE user_id=$1 AND NOT all_day AND status='pendiente' AND start_at BETWEEN now() + interval '10 minutes' AND now() + interval '3 hours'`, [u.id])) {
+      if (!placeOf(e, me)) continue;
+      const o = (await getRoute(me, e)).options?.[0], m = o?.leave ? (new Date(o.leave) - now) / 60000 : -1;
+      if (m > 0 && m <= 8 && await first(u.id, 'salir:' + e.id)) await push(u.id, 'Ritmo · hora de salir', `Sal en ${Math.round(m)} min para llegar a tiempo a «${e.title}». ${resumenRuta(o)}`);
+    }
     // b) resumen suave de la mañana
     if (hm >= '07:30' && hm < '09:00' && await first(u.id, 'resumen:' + day)) {
       const evs = await q(`SELECT title,start_at,all_day,source,cal,kind FROM events WHERE user_id=$1 AND status='pendiente' AND start_at BETWEEN now() - interval '40 days' AND now() + interval '2 days'`, [u.id]);
@@ -307,40 +316,66 @@ app.get('/api/usage', auth, async (req, res) => res.json(await q(
   [req.uid, await today(req.uid)])));
 
 // ---------- Rutas TransMilenio / SITP (Google Routes API, transporte público) ----------
+const ROUTES_URL = process.env.ROUTES_URL || 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const secs = v => parseInt(String(v || '0'), 10) || 0;
-app.get('/api/route/:id', auth, async (req, res) => {
-  const KEY = process.env.GOOGLE_MAPS_KEY;
-  if (!KEY) return res.json({ error: 'Falta GOOGLE_MAPS_KEY en el .env (activa Routes API en Google Cloud).' });
-  const [u] = await q('SELECT home,campus FROM users WHERE id=$1', [req.uid]);
-  const [e] = await q('SELECT title,start_at,location,kind,cal FROM events WHERE id=$1 AND user_id=$2', [req.params.id, req.uid]);
-  if (!e) return res.status(404).json({ error: 'no_existe' });
-  const clase = (e.kind || (/clase/i.test(e.cal) ? 'Clase' : '')) === 'Clase', to = e.location || (clase ? u.campus : null);
-  if (!u.home) return res.json({ error: 'Agrega tu dirección de casa en Perfil.' });
-  if (!to) return res.json({ error: 'Este evento no tiene lugar. Agrega el lugar habitual de clases en Perfil.' });
-  const arrive = new Date(new Date(e.start_at).getTime() - 10 * 60000);
-  if (arrive < Date.now()) return res.json({ error: 'Este evento ya casi empieza o ya pasó.' });
-  const place = a => ({ address: /bogot/i.test(a) ? a : a + ', Bogotá, Colombia' });
+const LL = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
+const placeOf = (e, u) => e.location || ((e.kind || (/clase/i.test(e.cal) ? 'Clase' : '')) === 'Clase' ? u.campus : null);
+const waypoint = a => LL.test(a) ? { location: { latLng: { latitude: +a.split(',')[0], longitude: +a.split(',')[1] } } } : { address: /bogot/i.test(a) ? a : a + ', Bogotá, Colombia' };
+const resumenRuta = o => o.steps.filter(s => s.type === 'transit').map(s => [s.agency, s.line].filter(Boolean).join(' ')).join(' → ') + ' · ' + o.minutes + ' min';
+const parseRoute = rt => {
+  const steps = (rt.legs?.[0]?.steps || []).map(x => { const t = x.transitDetails;
+    return t ? { type: 'transit', vehicle: t.transitLine?.vehicle?.type, line: t.transitLine?.nameShort || t.transitLine?.name, agency: t.transitLine?.agencies?.[0]?.name, headsign: t.headsign, stops: t.stopCount,
+        from: t.stopDetails?.departureStop?.name, to: t.stopDetails?.arrivalStop?.name, dep: t.stopDetails?.departureTime, arr: t.stopDetails?.arrivalTime }
+      : { type: 'walk', minutes: Math.max(1, Math.round(secs(x.staticDuration) / 60)), meters: x.distanceMeters || 0, text: x.navigationInstruction?.instructions }; });
+  let walk = 0; for (const s of steps) { if (s.type === 'transit') break; walk += s.minutes * 60; }
+  const first = steps.find(s => s.type === 'transit'), f = rt.travelAdvisory?.transitFare;
+  return { minutes: Math.round(secs(rt.duration) / 60), leave: first?.dep ? new Date(new Date(first.dep).getTime() - walk * 1000).toISOString() : null,
+    transfers: Math.max(0, steps.filter(s => s.type === 'transit').length - 1), walkMin: steps.filter(s => s.type === 'walk').reduce((a, s) => a + s.minutes, 0),
+    fare: f ? `${f.currencyCode === 'COP' ? '$' : f.currencyCode + ' '}${Number(f.units || 0).toLocaleString('es-CO')}` : null, steps };
+};
+async function getRoute(u, e, from) {
+  if (!process.env.GOOGLE_MAPS_KEY) return { error: 'Falta GOOGLE_MAPS_KEY en el .env (activa Routes API en Google Cloud).' };
+  const to = placeOf(e, u), origin = from || u.home;
+  if (!origin) return { error: 'Agrega tu dirección de casa en Perfil.' };
+  if (!to) return { error: 'sin_lugar' };
+  const start = new Date(e.start_at), arrive = new Date(start.getTime() - 10 * 60000);
+  if (arrive < Date.now()) return { error: 'Este evento ya casi empieza o ya pasó.' };
+  const key = [e.id, origin, to, start.toISOString()].join('|');
+  const [c] = await q(`SELECT data FROM route_cache WHERE key=$1 AND at > now() - CASE WHEN data->>'error' IS NULL THEN interval '30 minutes' ELSE interval '3 minutes' END`, [key]);
+  if (c) return c.data;
+  let out;
   try {
-    const r = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', { method: 'POST',
-      headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': KEY,
-        'X-Goog-FieldMask': 'routes.duration,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.transitDetails' },
-      body: JSON.stringify({ origin: place(u.home), destination: place(to), travelMode: 'TRANSIT', arrivalTime: arrive.toISOString(), computeAlternativeRoutes: true, languageCode: 'es', regionCode: 'CO' }) });
+    const r = await fetch(ROUTES_URL, { method: 'POST',
+      headers: { 'content-type': 'application/json', 'X-Goog-Api-Key': process.env.GOOGLE_MAPS_KEY,
+        'X-Goog-FieldMask': 'routes.duration,routes.travelAdvisory,routes.legs.steps.travelMode,routes.legs.steps.staticDuration,routes.legs.steps.distanceMeters,routes.legs.steps.navigationInstruction,routes.legs.steps.transitDetails' },
+      body: JSON.stringify({ origin: waypoint(origin), destination: waypoint(to), travelMode: 'TRANSIT', arrivalTime: arrive.toISOString(), computeAlternativeRoutes: true, languageCode: 'es', regionCode: 'CO' }) });
     const d = await r.json();
-    if (!d.routes?.length) return res.json({ error: d.error?.message || 'Google no encontró rutas de transporte público.' });
-    res.json({ to, options: d.routes.slice(0, 3).map(rt => {
-      const steps = rt.legs?.[0]?.steps || [], tr = steps.filter(x => x.transitDetails); let walk = 0;
-      for (const x of steps) { if (x.transitDetails) break; walk += secs(x.staticDuration); }
-      const dep = tr[0]?.transitDetails?.stopDetails?.departureTime;
-      return { minutes: Math.round(secs(rt.duration) / 60), leave: dep ? new Date(new Date(dep).getTime() - walk * 1000).toISOString() : null,
-        lines: tr.map(x => { const l = x.transitDetails.transitLine || {}; return { name: l.nameShort || l.name, agency: l.agencies?.[0]?.name }; }) };
-    }) });
-  } catch (err) { console.error('ruta:', err.message); res.json({ error: 'No pude consultar la ruta: ' + err.message }); }
+    out = d.routes?.length ? { to, from: origin, options: d.routes.slice(0, 3).map(parseRoute) } : { error: d.error?.message || 'Google no encontró rutas de transporte público.' };
+  } catch (err) { console.error('ruta:', err.message); out = { error: 'No pude consultar la ruta: ' + err.message }; }
+  await q('INSERT INTO route_cache(key,data) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET data=$2, at=now()', [key, out]);
+  return out;
+}
+app.get('/api/route/:id', auth, async (req, res) => {
+  const [u] = await q('SELECT home,campus FROM users WHERE id=$1', [req.uid]);
+  const [e] = await q('SELECT id,title,start_at,location,kind,cal FROM events WHERE id=$1 AND user_id=$2', [req.params.id, req.uid]);
+  if (!e) return res.status(404).json({ error: 'no_existe' });
+  const from = LL.test(String(req.query.from || '')) ? String(req.query.from).split(',').map(n => (+n).toFixed(3)).join(',') : '';
+  res.json(await getRoute(u, e, from));
+});
+// Si el evento no trae lugar, la persona lo escribe una vez y se recuerda para todos los que se llamen igual
+app.patch('/api/events/:id/place', auth, async (req, res) => {
+  const place = String(req.body.place || '').trim().slice(0, 200); if (!place) return res.status(400).json({ error: 'falta_lugar' });
+  const [e] = await q('SELECT title FROM events WHERE id=$1 AND user_id=$2', [req.params.id, req.uid]);
+  if (!e) return res.status(404).json({ error: 'no_existe' });
+  await q('INSERT INTO type_rules(user_id,title,place) VALUES($1,$2,$3) ON CONFLICT(user_id,title) DO UPDATE SET place=$3', [req.uid, e.title, place]);
+  await q('UPDATE events SET location=$3 WHERE user_id=$1 AND title=$2', [req.uid, e.title, place]);
+  res.json({ ok: true });
 });
 
 // ---------- Modo demo (DEMO_MODE=true): entra sin Google y con datos de ejemplo ----------
 app.get('/api/config', (_q, r) => r.json({ demo: process.env.DEMO_MODE === 'true' }));
 async function seedDemo(uid) {
-  for (const t of ['events', 'notifications', 'usage']) await q(`DELETE FROM ${t} WHERE user_id=$1`, [uid]);
+  for (const t of ['events', 'notifications', 'usage', 'type_rules']) await q(`DELETE FROM ${t} WHERE user_id=$1`, [uid]);
   const now = Date.now(), H = 36e5, day = n => ymd(now + n * 864e5, 'America/Bogota') + 'T12:00:00Z';
   const ev = [['Desarrollo cómputo_L510', 1.5, 'Clases', 'Clase', null], ['Redes cómputo_N407', 3.5, 'Clases', 'Clase', null],
     ['Entrevista de trabajo · Bancolombia', 26, 'Personal', 'Entrevista', 'Carrera 7 #71-21, Bogotá'], ['Gestión de proyectos aula', 28, 'Clases', 'Clase', null],

@@ -95,6 +95,9 @@ h1{display:flex;align-items:center;gap:10px}h1 img{width:34px;height:34px;border
 button.go{margin:6px 0 0;font-size:12px;background:var(--chip);border-radius:10px;padding:5px 11px}
 .ruta{margin-top:8px;padding:8px 10px;border-radius:12px;background:var(--chip)}.ruta b{font-weight:500;display:block}
 input[readonly]{font-size:12px}
+.org{display:flex;gap:6px;margin:8px 0 2px}.org button{font-size:12px;background:var(--chip);border-radius:10px;padding:5px 10px}.org button.on{background:var(--ink);color:var(--bg)}
+.step{font-size:13px;margin-top:7px}.step small{display:block;margin-top:1px}
+a.go{display:inline-block;margin-top:8px;font-size:12px;background:var(--chip);border-radius:10px;padding:5px 11px;color:inherit;text-decoration:none}
 </style>
 </head>
 <body>
@@ -106,7 +109,7 @@ const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag);
   kids.flat().forEach(c => e.append(c?.nodeType ? c : document.createTextNode(c ?? ''))); return e; };
 const api = async (url, opt = {}) => { const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...opt, body: opt.body && JSON.stringify(opt.body) });
   if (r.status === 401) throw new Error('no_auth'); return r.json(); };
-const S = { routes: {}, usage: [], filter: 'Todos', log: [], chatOpen: false, tab: 'home', month: new Date(), sel: new Date(), events: [], nots: [], hist: [], me: null };
+const S = { origin: 'casa', auto: {}, routes: {}, usage: [], filter: 'Todos', log: [], chatOpen: false, tab: 'home', month: new Date(), sel: new Date(), events: [], nots: [], hist: [], me: null };
 const same = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
 const fmt = d => new Date(d).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 // Verde = hecho/confirmado, Rojo = pendiente en <48h, Amarillo = pendiente más adelante
@@ -246,18 +249,38 @@ function usageCard() {
 }
 const hr = x => new Date(x).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 const canRoute = e => e.status === 'pendiente' && !e.all_day && e.source !== 'task' && new Date(e.start_at) - Date.now() > 6e5 && tipo(e) !== 'Festivo';
+const hasPlace = e => e.location || (tipo(e) === 'Clase' && S.me?.campus);
+const nextEvent = () => S.events.filter(e => canRoute(e) && hasPlace(e) && new Date(e.start_at) - Date.now() < 864e5).sort((a, b) => new Date(a.start_at) - new Date(b.start_at))[0];
+async function fetchRoute(e) {
+  let from = '';
+  if (S.origin === 'aqui') { try { const p = await new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, { timeout: 8000 })); from = `${p.coords.latitude},${p.coords.longitude}`; }
+    catch { S.origin = 'casa'; S.msg = 'No pude obtener tu ubicación; uso tu casa.'; } }
+  S.routes[e.id] = { wait: true }; render();
+  S.routes[e.id] = await api('/api/route/' + e.id + (from ? '?from=' + from : '')).catch(() => ({ error: 'No pude consultar la ruta.' })); render();
+}
+function routeOpt(o) {
+  const sub = [o.minutes + ' min', o.transfers ? o.transfers + (o.transfers === 1 ? ' transbordo' : ' transbordos') : 'sin transbordos', o.walkMin + ' min a pie', o.fare].filter(Boolean).join(' · ');
+  return h('div', { class: 'ruta' }, h('b', {}, o.leave ? `Sal a las ${hr(o.leave)} · llegas ~${hr(new Date(o.leave).getTime() + o.minutes * 6e4)}` : 'Ruta sugerida'), h('small', {}, sub),
+    ...o.steps.map(s => s.type === 'walk'
+      ? h('div', { class: 'step' }, `Camina ${s.minutes} min` + (s.meters ? ` (${s.meters} m)` : ''), s.text ? h('small', {}, s.text) : '')
+      : h('div', { class: 'step' }, [s.agency, s.line].filter(Boolean).join(' ') + (s.headsign ? ' hacia ' + s.headsign : ''),
+          h('small', {}, `Sube en ${s.from || '—'}${s.dep ? ' (' + hr(s.dep) + ')' : ''} · ${s.stops || '?'} paradas · baja en ${s.to || '—'}${s.arr ? ' (' + hr(s.arr) + ')' : ''}`))));
+}
 function routeBox(e) {
   if (!canRoute(e)) return '';
   const r = S.routes[e.id];
-  const go = h('button', { class: 'go', onclick: async () => {
-    if (r) { delete S.routes[e.id]; return render(); }
-    S.routes[e.id] = { wait: true }; render();
-    S.routes[e.id] = await api('/api/route/' + e.id).catch(() => ({ error: 'No pude consultar la ruta.' })); render(); } }, r ? 'Ocultar ruta' : 'Cómo llegar');
+  const go = h('button', { class: 'go', onclick: () => { if (r) { delete S.routes[e.id]; return render(); } fetchRoute(e); } }, r ? 'Ocultar ruta' : 'Cómo llegar');
   if (!r) return go;
-  const body = r.wait ? [h('small', {}, 'Buscando TransMilenio y SITP…')] : r.error ? [h('small', {}, r.error)] :
-    r.options.map(o => h('div', { class: 'ruta' }, h('b', {}, (o.leave ? 'Sal a las ' + hr(o.leave) + ' · ' : '') + o.minutes + ' min'),
-      h('small', {}, o.lines.map(l => [l.agency, l.name].filter(Boolean).join(' ')).join(' → ') || 'A pie')));
-  return h('div', {}, go, ...body);
+  if (r.wait) return h('div', {}, go, h('small', {}, 'Buscando TransMilenio y SITP…'));
+  if (r.error === 'sin_lugar') {
+    const inp = h('input', { placeholder: 'Dirección o lugar, ej: Calle 26 #51-53', 'aria-label': 'Lugar del evento' });
+    return h('div', {}, go, h('small', {}, 'Este evento no trae lugar. ¿A dónde es?'), inp,
+      h('button', { class: 'go', onclick: async () => { if (!inp.value.trim()) return; await api(`/api/events/${e.id}/place`, { method: 'PATCH', body: { place: inp.value } }); await load(); fetchRoute(e); } }, 'Guardar y buscar'));
+  }
+  if (r.error) return h('div', {}, go, h('small', {}, r.error));
+  const org = h('div', { class: 'org' }, ...[['casa', 'Desde casa'], ['aqui', 'Desde mi ubicación']].map(([k, t]) => h('button', { class: S.origin === k ? 'on' : '', onclick: () => { S.origin = k; fetchRoute(e); } }, t)));
+  const maps = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(r.from)}&destination=${encodeURIComponent(r.to + (/bogot/i.test(r.to) ? '' : ', Bogotá'))}&travelmode=transit`;
+  return h('div', {}, go, h('small', {}, 'Hacia ' + r.to), org, ...r.options.map(routeOpt), h('a', { class: 'go', href: maps, target: '_blank', rel: 'noopener' }, 'Abrir en Google Maps'));
 }
 async function enablePush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return alert('Este navegador no permite notificaciones. En iPhone, primero instala Ritmo en la pantalla de inicio.');
@@ -282,6 +305,9 @@ function tips(late) {
   const cit = S.nots.filter(n => n.status === 'pendiente' && n.kind === 'cita').length, pag = S.nots.filter(n => n.status === 'pendiente' && n.kind === 'pago').length;
   if (cit) T.push(`${pl(cit, 'correo de cita', 'correos de citas')} por revisar.`);
   if (pag) T.push(`${pl(pag, 'pago o suscripción', 'pagos o suscripciones')} en tu correo.`);
+  const ne = nextEvent();
+  if (ne) { const r = S.routes[ne.id]; if (!r && !S.auto[ne.id]) { S.auto[ne.id] = 1; setTimeout(() => fetchRoute(ne), 0); }
+    const o = r?.options?.[0]; if (o?.leave) T.unshift(`Para llegar a las ${hora(ne)} a «${ne.title}», sal a las ${hr(o.leave)}. ${o.steps.filter(s => s.type === 'transit').map(s => [s.agency, s.line].filter(Boolean).join(' ')).join(' → ')} · ${o.minutes} min.`); }
   if (!T.length) T.push('Día tranquilo. Buen momento para adelantar algo de la semana.');
   return h('div', { class: 'card tips' }, h('strong', {}, 'Para hoy'), ...T.slice(0, 4).map(t => h('p', {}, t)),
     h('button', { class: 'ghost', onclick: () => setChat(true) }, 'Preguntarle a la IA'));
