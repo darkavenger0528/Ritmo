@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Ritmo</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<meta name="theme-color" content="#ECEAE2">
+<meta name="color-scheme" content="light dark">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:"Code Next";src:url(/fonts/CodeNext-Regular.woff2) format("woff2"),url(/fonts/CodeNext-Regular.otf) format("opentype");font-weight:400;font-display:swap}
+:root{color-scheme:light dark;
+--lima:#A8C65A;--bg:light-dark(#ECEAE2,#0E1210);--glass:light-dark(rgba(247,248,249,.68),rgba(36,38,42,.62));
+--ink:light-dark(#1E3B2F,#E9EBEE);--mute:light-dark(#7D838B,#8E949C);
+--line:light-dark(rgba(0,0,0,.07),rgba(255,255,255,.09));--shadow:light-dark(rgba(40,50,60,.32),rgba(0,0,0,.7));
+--chip:light-dark(rgba(0,0,0,.06),rgba(255,255,255,.08));
+--verde:light-dark(#8DB299,#7FA38B);--rojo:light-dark(#CD8E89,#BC7B77);--amarillo:light-dark(#D2BC80,#BBA76E)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;margin:0}
+body{font:400 16px/1.4 "Code Next","Outfit","Avenir Next",system-ui,sans-serif;color:var(--ink);min-height:100dvh;padding-bottom:130px;
+background:radial-gradient(60% 38% at 12% 0%,light-dark(rgba(141,178,153,.35),rgba(127,163,139,.16)),transparent 70%),radial-gradient(50% 36% at 100% 28%,light-dark(rgba(205,142,137,.25),rgba(188,123,119,.12)),transparent 70%),var(--bg);background-attachment:fixed}
+.card,.item,nav,#chat,.toast,header button{background:var(--glass);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4);border:1px solid var(--line);box-shadow:0 14px 34px -16px var(--shadow)}
+header{display:flex;justify-content:space-between;align-items:center;padding:calc(env(safe-area-inset-top) + 16px) 22px 10px;position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg) 55%,transparent)}
+h1{font-size:34px;font-weight:300;letter-spacing:-.02em} h2{font-size:15px;font-weight:500;margin:22px 4px 10px;color:var(--mute)}
+button{font:inherit;cursor:pointer;border:0;color:inherit}
+:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+.hb{display:flex;gap:10px}
+header button{width:44px;height:44px;border-radius:50%;font-size:18px}
+#ia{background:var(--ink);color:var(--bg);font-weight:500;font-size:15px}
+.spin svg{animation:sp 1s linear infinite}@keyframes sp{to{transform:rotate(360deg)}}
+main{padding:0 16px;max-width:560px;margin:auto}
+.card{border-radius:30px;padding:18px 16px 14px}
+.cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.cal-head strong{font-size:22px;font-weight:300}.cal-head strong::first-letter{text-transform:uppercase}
+.cal-head button{background:none;font-size:24px;padding:2px 14px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px 2px;text-align:center}
+.grid b{font-size:12px;color:var(--mute);font-weight:400;padding-bottom:4px}
+.d{height:46px;border-radius:16px;background:none;position:relative;font-size:16px}
+.d.sel{background:var(--ink);color:var(--bg)}
+.d.today:not(.sel){box-shadow:inset 0 0 0 1.5px var(--ink)}
+.dots{position:absolute;bottom:5px;left:0;right:0;display:flex;justify-content:center;gap:3px}
+.dots i{width:5px;height:5px;border-radius:50%}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);margin:12px 6px 0}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+.item{border-radius:20px;padding:12px 14px;margin-bottom:10px;border:1.5px solid var(--line);display:flex;justify-content:space-between;gap:10px;align-items:center}
+.item.verde{border-color:var(--verde)}.item.rojo{border-color:var(--rojo)}.item.amarillo{border-color:var(--amarillo)}
+.item small{color:var(--mute);display:block;font-size:13px}
+.item button{background:var(--chip);border-radius:12px;padding:8px 12px;font-size:13px;white-space:nowrap}
+.empty{color:var(--mute);padding:6px 6px}
+nav{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom));width:min(92%,420px);display:flex;gap:4px;border-radius:32px;padding:7px;z-index:6}
+nav button{flex:1;background:none;display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--mute);padding:7px 4px;border-radius:25px}
+nav button span{font-size:21px;line-height:1.1}
+nav button.on{background:var(--ink);color:var(--bg)}
+label{display:block;margin:14px 4px 6px;font-size:14px;color:var(--mute)}
+input,textarea{width:100%;font:inherit;color:inherit;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--chip)}
+.primary{background:var(--ink);color:var(--bg);padding:14px 18px;border-radius:18px;margin-top:12px;width:100%}
+.ghost{background:var(--chip);color:var(--ink)}
+.danger{background:var(--rojo);color:#1d1d1d}
+.toast{position:fixed;top:calc(env(safe-area-inset-top) + 70px);left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:20px;font-size:14px;z-index:9;max-width:90%}
+#chat{position:fixed;left:10px;right:10px;bottom:10px;height:68dvh;border-radius:30px;padding:18px;display:none;flex-direction:column;z-index:10;max-width:560px;margin:auto}
+#chat.open{display:flex}
+#msgs{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.m{padding:9px 13px;border-radius:18px;max-width:85%;background:var(--chip)}.m.me{align-self:flex-end;background:var(--amarillo);color:#1d1d1d}
+#login{text-align:center;padding:28vh 24px 0}
+@media (prefers-reduced-motion:reduce){.spin svg{animation:none}}
+nav button svg{width:22px;height:22px;margin-bottom:3px}header button svg,.cal-head button svg{width:20px;height:20px}
+.tips{margin-top:14px;display:flex;flex-direction:column;gap:8px;border-radius:26px}.tips strong{font-weight:500;font-size:15px}.tips p{font-size:15px;line-height:1.35}
+.tips .ghost,.chips button{background:var(--chip);border-radius:14px;padding:9px 14px;font-size:13px;align-self:flex-start}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+nav{padding:6px 8px;align-items:center;justify-content:space-around}
+nav button{flex:none;flex-direction:row;gap:8px;align-items:center;justify-content:center;padding:12px 16px;border-radius:26px;color:var(--mute);transition:background .2s}
+nav button svg{width:24px;height:24px;margin:0}
+nav button b{display:none;font-weight:500;font-size:14px}
+nav button.on{background:var(--ink);color:var(--bg);padding:12px 20px}
+nav button.on b{display:inline}
+nav button.add{background:var(--lima);color:#1b1d20;width:56px;height:56px;padding:0;border-radius:50%;margin-top:-22px;box-shadow:0 12px 24px -8px var(--shadow),0 0 0 6px var(--glass)}
+nav button.add.on{background:var(--ink);color:var(--bg)}
+nav button.add b{display:none!important}
+.filt{flex-wrap:nowrap;overflow-x:auto;margin:0 0 14px;padding:2px 2px 6px;scrollbar-width:none}
+.filt button{white-space:nowrap;flex:none}
+.filt button.on{background:var(--ink);color:var(--bg)}
+select.tag{margin-top:6px;font:inherit;font-size:12px;color:var(--ink);background:var(--chip);border:0;border-radius:10px;padding:4px 8px;max-width:100%}
+select.tag option{background:var(--bg);color:var(--ink)}
+h1{display:flex;align-items:center;gap:10px}h1 img{width:34px;height:34px;border-radius:10px}
+#login img{display:block;margin:0 auto 14px;width:96px;height:96px;border-radius:26px}
+.item>div{min-width:0}
+.prof{display:grid;grid-template-columns:72px 1fr;gap:6px 14px;align-items:center}
+.av{width:72px;height:72px;border-radius:50%;object-fit:cover;background:var(--chip);display:grid;place-items:center;font-size:28px}
+.prof .row{grid-column:1/-1;display:flex;gap:8px}
+.ghost.sm{padding:9px 14px;border-radius:12px;font-size:13px}
+.bar{display:grid;gap:4px}.bar span{font-size:14px}.bar small{color:var(--mute);font-size:12px}.bar i{display:block;height:6px;border-radius:6px;background:var(--lima)}
+button.go{margin:6px 0 0;font-size:12px;background:var(--chip);border-radius:10px;padding:5px 11px}
+.ruta{margin-top:8px;padding:8px 10px;border-radius:12px;background:var(--chip)}.ruta b{font-weight:500;display:block}
+input[readonly]{font-size:12px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const h = (tag, props = {}, ...kids) => { const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) k.startsWith('on') ? e.addEventListener(k.slice(2), v) : k === 'class' ? e.className = v : e.setAttribute(k, v);
+  kids.flat().forEach(c => e.append(c?.nodeType ? c : document.createTextNode(c ?? ''))); return e; };
+const api = async (url, opt = {}) => { const r = await fetch(url, { headers: { 'content-type': 'application/json' }, ...opt, body: opt.body && JSON.stringify(opt.body) });
+  if (r.status === 401) throw new Error('no_auth'); return r.json(); };
+const S = { routes: {}, usage: [], filter: 'Todos', log: [], chatOpen: false, tab: 'home', month: new Date(), sel: new Date(), events: [], nots: [], hist: [], me: null };
+const same = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+const fmt = d => new Date(d).toLocaleString('es', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+// Verde = hecho/confirmado, Rojo = pendiente en <48h, Amarillo = pendiente más adelante
+const P = {
+  home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v9h12v-9"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+  hist: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>', user: '<circle cx="12" cy="9" r="3.5"/><path d="M5 19c1-3.5 4-5 7-5s6 1.5 7 5"/>',
+  sync: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>' };
+const ic = d => { const t = document.createElement('template'); t.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>'; return t.content.firstChild; };
+const setChat = v => { S.chatOpen = v; $('#chat').classList.toggle('open', v); };
+const hora = e => new Date(e.start_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+// días entre hoy y el evento (negativo = ya pasó). Los eventos de día completo se comparan por fecha.
+const dayDiff = e => { const d = e.all_day ? new Date(e.start_at).toISOString().slice(0, 10) : new Date(e.start_at).toLocaleDateString('en-CA');
+  return Math.round((Date.parse(d) - Date.parse(new Date().toLocaleDateString('en-CA'))) / 864e5); };
+// Qué tipo de cosa es: por origen, calendario y título
+const TIPOS = ['Clase', 'Tarea', 'Entrevista', 'Cita', 'Reunión', 'Pago', 'Entrega o examen', 'Personal', 'Festivo', 'Cumpleaños', 'Evento'];
+const tipo = e => { if (e.kind) return e.kind; const c = (e.cal || '').toLowerCase(), t = e.title.toLowerCase();
+  if (e.source === 'task') return 'Tarea';
+  if (/festivo|holiday/.test(c)) return 'Festivo';
+  if (/aniversario|cumple|birthday/.test(c + t)) return 'Cumpleaños';
+  if (/clase/.test(c) || /_[a-z]\d{3}\b|aula|sandbox/i.test(e.title)) return 'Clase';
+  if (/pago|factura|spotify|netflix|suscrip/.test(t)) return 'Pago';
+  if (/examen|quiz|parcial|entrega|taller|exposici|workshop/.test(t)) return 'Entrega o examen';
+  if (/entrevista|interview/.test(t)) return 'Entrevista';
+  if (/reuni|meeting/.test(t)) return 'Reunión';
+  if (/cita|doctor|m[eé]dic|dentist/.test(t)) return 'Cita';
+  return 'Evento'; };
+const color = e => { if (e.status !== 'pendiente') return 'verde';
+  if (e.source === 'calendar') return (e.all_day ? dayDiff(e) < 0 : new Date(e.start_at) < Date.now()) ? 'verde' : 'amarillo';
+  return dayDiff(e) <= 1 ? 'rojo' : 'amarillo'; };   // tareas y manuales: rojo si vence hoy, mañana o ya venció
+const applyTheme = () => document.documentElement.dataset.theme = localStorage.getItem('theme') || '';
+const toggleTheme = () => { const dark = (document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')) === 'dark'; localStorage.setItem('theme', dark ? 'light' : 'dark'); applyTheme(); };
+applyTheme();
+
+async function load() {
+  [S.events, S.nots, S.usage] = await Promise.all([api('/api/events'), api('/api/notifications'), api('/api/usage')]);
+}
+async function sync(btn) {
+  btn.disabled = true; btn.classList.add('spin');
+  try {
+    const r = await api('/api/sync', { method: 'POST' });
+    S.msg = r.error ? 'No se pudo sincronizar. Cierra sesión y vuelve a entrar.' : `${r.events} eventos · ${r.tasks} tareas · ${r.mails} correos` + (r.warnings?.length ? ` · falló: ${r.warnings.join(', ')}` : '');
+    await load();
+  } catch { S.msg = 'No se pudo sincronizar.'; }
+  render(); setTimeout(() => { S.msg = ''; render(); }, 9000);
+}
+const matches = e => S.filter === 'Todos' || tipo(e) === S.filter;
+function filters() {
+  const n = {}; S.events.forEach(e => { const t = tipo(e); n[t] = (n[t] || 0) + 1; });
+  const names = ['Todos', ...Object.keys(n).sort((a, b) => n[b] - n[a])]; if (!names.includes(S.filter)) S.filter = 'Todos';
+  return h('div', { class: 'chips filt' }, ...names.map(x => h('button', { class: S.filter === x ? 'on' : '', onclick: () => { S.filter = x; render(); } }, x)));
+}
+function tipoSel(e) {
+  const cur = tipo(e), opts = [...new Set([...TIPOS, ...S.events.map(tipo), cur])];
+  const s = h('select', { class: 'tag', 'aria-label': 'Tipo de evento' }, ...opts.map(o => h('option', { value: o, ...(o === cur ? { selected: '' } : {}) }, o)), h('option', { value: '__otro' }, 'Otro tipo…'));
+  s.addEventListener('change', async () => { let v = s.value; if (v === '__otro') v = (prompt('Nombre del tipo de evento') || '').trim(); if (!v) return render();
+    await api(`/api/events/${e.id}/kind`, { method: 'PATCH', body: { kind: v } }); await load(); if (S.tab === 'history') S.hist = await api('/api/history'); render(); });
+  return s;
+}
+function evItem(e) {
+  return h('div', { class: 'item ' + color(e) }, h('div', {}, e.title,
+      h('small', {}, (e.all_day ? new Date(e.start_at).toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' }) : fmt(e.start_at)) + (e.cal ? ' · ' + e.cal : '')), tipoSel(e), routeBox(e)),
+    e.status === 'pendiente' ? h('button', { onclick: async () => { await api('/api/events/' + e.id, { method: 'PATCH', body: { status: 'hecho' } }); await load(); render(); } }, 'Marcar hecho') : '');
+}
+function calendar() {
+  const y = S.month.getFullYear(), m = S.month.getMonth(), first = new Date(y, m, 1), pad = (first.getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+  const g = h('div', { class: 'grid' }, ...['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(x => h('b', {}, x)), ...Array(pad).fill(0).map(() => h('span')));
+  for (let d = 1; d <= days; d++) {
+    const dt = new Date(y, m, d), es = S.events.filter(e => same(e.start_at, dt) && matches(e));
+    const b = h('button', { class: 'd' + (same(dt, S.sel) ? ' sel' : '') + (same(dt, new Date()) ? ' today' : ''), 'aria-label': `Día ${d}`, onclick: () => { S.sel = dt; render(); } }, d);
+    if (es.length) { const w = h('span', { class: 'dots' }); [...new Set(es.map(color))].slice(0, 3).forEach(c => w.append(h('i', { style: `background:var(--${c})` }))); b.append(w); }
+    g.append(b);
+  }
+  const mv = n => () => { S.month = new Date(y, m + n, 1); render(); };
+  return h('div', { class: 'card' }, h('div', { class: 'cal-head' }, h('button', { onclick: mv(-1), 'aria-label': 'Mes anterior' }, '‹'),
+    h('strong', {}, first.toLocaleString('es', { month: 'long', year: 'numeric' })), h('button', { onclick: mv(1), 'aria-label': 'Mes siguiente' }, '›')), g);
+}
+const views = {
+  home() {
+    const late = S.events.filter(e => e.source !== 'calendar' && e.status === 'pendiente' && dayDiff(e) < 0 && matches(e)), day = S.events.filter(e => same(e.start_at, S.sel) && matches(e)), pend = S.nots.filter(n => n.status === 'pendiente');
+    return [filters(), calendar(),
+      h('div', { class: 'legend' }, ...[['verde', 'Hecho'], ['rojo', 'Urgente'], ['amarillo', 'Pendiente']].map(([c, t]) => h('span', {}, h('i', { style: `background:var(--${c})` }), t))),
+      tips(late), usageCard(),
+      ...(late.length ? [h('h2', {}, 'Atrasado'), ...late.map(evItem)] : []),
+      h('h2', {}, 'Eventos del ' + S.sel.toLocaleDateString('es', { day: 'numeric', month: 'long' })),
+      ...(day.length ? day.map(evItem) : [h('p', { class: 'empty' }, 'Sin eventos este día.')]),
+      h('h2', {}, 'Notificaciones del correo'),
+      ...(pend.length ? pend.map(n => h('div', { class: 'item ' + (n.kind === 'cita' ? 'rojo' : 'amarillo') },
+        h('div', {}, n.title, h('small', {}, ({ cita: 'Cita', pago: 'Pago o suscripción', tarea: 'Tarea sin fecha' }[n.kind] || 'Correo') + ' · ' + (n.from_addr || '').split('<')[0].trim() + ' · ' + n.snippet.slice(0, 60))),
+        h('button', { onclick: async () => { await api('/api/notifications/' + n.id, { method: 'PATCH', body: { status: 'hecho' } }); await load(); render(); } }, 'Listo'))) :
+        [h('p', { class: 'empty' }, 'Todo al día. Usa el botón de sincronizar para revisar tu correo.')])];
+  },
+  add() {
+    const t = h('input', { id: 't' }), s = h('input', { id: 's', type: 'datetime-local' }), n = h('textarea', { rows: '3' });
+    const k = h('input', { id: 'k', list: 'tipos', placeholder: 'Clase, Entrevista de trabajo, Pago…' });
+    const dl = h('datalist', { id: 'tipos' }, ...[...new Set([...TIPOS, ...S.events.map(tipo)])].map(o => h('option', { value: o })));
+    return [h('h2', {}, 'Añadir evento'), h('label', { for: 't' }, 'Título'), t, h('label', { for: 'k' }, 'Tipo de evento'), k, dl, h('label', { for: 's' }, 'Fecha y hora'), s, h('label', {}, 'Notas'), n,
+      h('button', { class: 'primary', onclick: async () => { if (!t.value || !s.value) return alert('Completa título y fecha');
+        await api('/api/events', { method: 'POST', body: { title: t.value, start_at: new Date(s.value).toISOString(), notes: n.value, kind: k.value.trim() || 'Evento' } }); await load(); S.tab = 'home'; render(); } }, 'Guardar evento')];
+  },
+  history() { return [h('h2', {}, 'Historial de eventos'), ...(S.hist.length ? S.hist.map(evItem) : [h('p', { class: 'empty' }, 'Aún no hay eventos pasados.')])]; },
+  profile() {
+    const u = S.me, save = async body => { await api('/api/me', { method: 'PATCH', body }); S.me = await api('/api/me'); render(); };
+    const nm = h('input', { value: u.name || '', 'aria-label': 'Nombre' }), home = h('input', { value: u.home || '', placeholder: 'Ej: Calle 100 #15-20, Bogotá', 'aria-label': 'Casa' }),
+      campus = h('input', { value: u.campus || '', placeholder: 'Ej: Universidad…, Bogotá', 'aria-label': 'Lugar habitual' }), file = h('input', { type: 'file', accept: 'image/*', style: 'display:none' }),
+      app = h('input', { placeholder: 'App (ej: Instagram)', 'aria-label': 'App' }), min = h('input', { type: 'number', placeholder: 'Minutos', 'aria-label': 'Minutos' });
+    file.addEventListener('change', async () => { if (file.files[0]) save({ picture: await shrink(file.files[0]) }); });
+    return [h('h2', {}, 'Perfil'),
+      h('div', { class: 'card prof' }, avatar(u, 'av'), h('div', {}, h('label', {}, 'Nombre'), nm),
+        h('div', { class: 'row' }, h('button', { class: 'ghost sm', onclick: () => file.click() }, 'Cambiar foto'), h('button', { class: 'ghost sm', onclick: () => save({ picture: '' }) }, 'Usar la de Google'), file)),
+      h('label', {}, 'Mi casa (para sugerirte rutas)'), home, h('label', {}, 'Lugar habitual de clases o trabajo'), campus,
+      h('button', { class: 'primary', onclick: async () => { await save({ name: nm.value, home: home.value, campus: campus.value }); S.msg = 'Perfil guardado'; render(); } }, 'Guardar perfil'),
+      h('h2', {}, 'Recordatorios'),
+      h('button', { class: 'primary ghost', onclick: enablePush }, 'Activar recordatorios en este dispositivo'),
+      h('button', { class: 'primary ghost', onclick: () => api('/api/push/test', { method: 'POST' }) }, 'Enviarme uno de prueba'),
+      h('h2', {}, 'Tiempo en apps'),
+      h('p', { class: 'empty' }, 'Una web no puede leer el uso de otras apps. Un Atajo de iPhone o Tasker en Android puede enviar aquí «abrí» y «cerré» cada app, con esta dirección (POST, JSON {app, event}):'),
+      h('input', { readonly: '', value: `${location.origin}/api/usage?t=${u.api_token}`, 'aria-label': 'Dirección privada', onclick: e => e.target.select() }),
+      app, min, h('button', { class: 'primary ghost', onclick: async () => { await api('/api/usage', { method: 'POST', body: { app: app.value, minutes: +min.value } }); await load(); S.msg = 'Tiempo registrado'; render(); } }, 'Registrar tiempo a mano'),
+      h('h2', {}, 'Cuenta'),
+      h('button', { class: 'primary', onclick: e => sync(e.target) }, 'Sincronizar Calendar, Tareas y Gmail'),
+      h('button', { class: 'primary ghost', onclick: toggleTheme }, 'Cambiar tema claro / oscuro'),
+      h('button', { class: 'primary ghost', onclick: async () => { await api('/auth/logout', { method: 'POST' }); location.reload(); } }, 'Cerrar sesión'),
+      h('button', { class: 'primary danger', onclick: async () => { if (confirm('Se borrarán todos tus datos. ¿Continuar?')) { await api('/api/me', { method: 'DELETE' }); location.reload(); } } }, 'Eliminar mi cuenta')];
+  }
+};
+const avatar = (u, cls) => u.picture ? h('img', { class: cls, src: u.picture, alt: '', referrerpolicy: 'no-referrer' }) : h('span', { class: cls }, (u.name || '?')[0]);
+const shrink = file => new Promise(ok => { const i = new Image(); i.onload = () => { const c = document.createElement('canvas'), m = Math.min(i.width, i.height); c.width = c.height = 256;
+  c.getContext('2d').drawImage(i, (i.width - m) / 2, (i.height - m) / 2, m, m, 0, 0, 256, 256); ok(c.toDataURL('image/jpeg', .85)); }; i.src = URL.createObjectURL(file); });
+const mm = n => n >= 60 ? Math.floor(n / 60) + ' h' + (n % 60 ? ' ' + n % 60 + ' min' : '') : n + ' min';
+function usageCard() {
+  if (!S.usage?.length) return '';
+  const tot = S.usage.reduce((a, u) => a + u.hoy, 0), max = Math.max(...S.usage.map(u => u.semana)), top = [...S.usage].sort((a, b) => b.hoy - a.hoy)[0];
+  return h('div', { class: 'card tips' }, h('strong', {}, 'Tu tiempo en apps'),
+    h('p', {}, `Hoy llevas ${mm(tot)}.` + (top.hoy >= 60 ? ` ${top.app} se llevó ${mm(top.hoy)}: quizá toque una pausa.` : '')),
+    ...S.usage.slice(0, 4).map(u => h('div', { class: 'bar' }, h('span', {}, u.app), h('i', { style: `width:${Math.max(4, u.semana / max * 100)}%` }), h('small', {}, `${mm(u.hoy)} hoy · ${mm(u.semana)} en 7 días`))));
+}
+const hr = x => new Date(x).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
+const canRoute = e => e.status === 'pendiente' && !e.all_day && e.source !== 'task' && new Date(e.start_at) - Date.now() > 6e5 && tipo(e) !== 'Festivo';
+function routeBox(e) {
+  if (!canRoute(e)) return '';
+  const r = S.routes[e.id];
+  const go = h('button', { class: 'go', onclick: async () => {
+    if (r) { delete S.routes[e.id]; return render(); }
+    S.routes[e.id] = { wait: true }; render();
+    S.routes[e.id] = await api('/api/route/' + e.id).catch(() => ({ error: 'No pude consultar la ruta.' })); render(); } }, r ? 'Ocultar ruta' : 'Cómo llegar');
+  if (!r) return go;
+  const body = r.wait ? [h('small', {}, 'Buscando TransMilenio y SITP…')] : r.error ? [h('small', {}, r.error)] :
+    r.options.map(o => h('div', { class: 'ruta' }, h('b', {}, (o.leave ? 'Sal a las ' + hr(o.leave) + ' · ' : '') + o.minutes + ' min'),
+      h('small', {}, o.lines.map(l => [l.agency, l.name].filter(Boolean).join(' ')).join(' → ') || 'A pie')));
+  return h('div', {}, go, ...body);
+}
+async function enablePush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return alert('Este navegador no permite notificaciones. En iPhone, primero instala Ritmo en la pantalla de inicio.');
+  if (await Notification.requestPermission() !== 'granted') return alert('Permiso denegado. Actívalo en los ajustes del navegador.');
+  const reg = await navigator.serviceWorker.ready, { key } = await api('/api/push/key');
+  const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true,
+    applicationServerKey: Uint8Array.from(atob(key.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)) });
+  await api('/api/push/sub', { method: 'POST', body: { sub: sub.toJSON() } });
+  await api('/api/me', { method: 'PATCH', body: { tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
+  S.msg = 'Recordatorios activados en este dispositivo'; render();
+}
+function tips(late) {
+  const T = [], pl = (n, s, p) => n + ' ' + (n === 1 ? s : p), today = S.events.filter(e => dayDiff(e) === 0);
+  const soon = S.events.filter(e => e.source !== 'calendar' && e.status === 'pendiente' && [1, 2].includes(dayDiff(e)));
+  if (late.length) { const o = [...late].sort((a, b) => new Date(a.start_at) - new Date(b.start_at))[0], n = -dayDiff(o);
+    T.push(`Tienes ${pl(late.length, 'pendiente atrasado', 'pendientes atrasados')}. Empieza por «${o.title}», venció hace ${pl(n, 'día', 'días')}.`); }
+  const cl = today.filter(e => tipo(e) === 'Clase').sort((a, b) => new Date(a.start_at) - new Date(b.start_at));
+  if (cl.length) T.push(`Hoy tienes ${pl(cl.length, 'clase', 'clases')}; la primera es a las ${hora(cl[0])}.`);
+  const due = today.filter(e => e.source === 'task' && e.status === 'pendiente');
+  if (due.length) T.push(`Hoy vence: ${due.map(e => '«' + e.title + '»').join(', ')}.`);
+  if (soon.length) T.push(`En los próximos 2 días: ${soon.slice(0, 3).map(e => '«' + e.title + '»').join(', ')}.`);
+  const cit = S.nots.filter(n => n.status === 'pendiente' && n.kind === 'cita').length, pag = S.nots.filter(n => n.status === 'pendiente' && n.kind === 'pago').length;
+  if (cit) T.push(`${pl(cit, 'correo de cita', 'correos de citas')} por revisar.`);
+  if (pag) T.push(`${pl(pag, 'pago o suscripción', 'pagos o suscripciones')} en tu correo.`);
+  if (!T.length) T.push('Día tranquilo. Buen momento para adelantar algo de la semana.');
+  return h('div', { class: 'card tips' }, h('strong', {}, 'Para hoy'), ...T.slice(0, 4).map(t => h('p', {}, t)),
+    h('button', { class: 'ghost', onclick: () => setChat(true) }, 'Preguntarle a la IA'));
+}
+function chat() {
+  const box = h('div', { id: 'msgs' }), inp = h('input', { placeholder: 'Pregúntale a tu asistente…', 'aria-label': 'Mensaje' });
+  S.log.forEach(m => box.append(h('div', { class: 'm' + (m.me ? ' me' : '') }, m.t)));
+  const send = async text => {
+    const v = (text ?? inp.value).trim(); if (!v) return; inp.value = '';
+    const bot = { t: 'Pensando…' }; S.log.push({ me: true, t: v }, bot);
+    box.append(h('div', { class: 'm me' }, v)); const w = h('div', { class: 'm' }, bot.t); box.append(w); box.scrollTop = 1e6;
+    try { bot.t = (await api('/api/ai', { method: 'POST', body: { message: v, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } })).reply; }
+    catch { bot.t = 'No pude conectar con el servidor.'; }
+    w.textContent = bot.t; box.scrollTop = 1e6;
+  };
+  inp.addEventListener('keydown', e => e.key === 'Enter' && send());
+  const chips = h('div', { class: 'chips' }, ...['¿Qué hago hoy?', '¿Qué tengo atrasado?', 'Resume mi semana'].map(t => h('button', { onclick: () => send(t) }, t)));
+  return h('div', { id: 'chat', class: S.chatOpen ? 'open' : '' }, h('div', { class: 'cal-head' }, h('strong', {}, 'Asistente'),
+    h('button', { onclick: () => setChat(false), 'aria-label': 'Cerrar' }, ic(P.close))), box, chips, inp);
+}
+function render() {
+  const app = $('#app'); app.replaceChildren();
+  if (!S.me) return app.append(h('div', { id: 'login' }, h('img', { src: '/icon.svg', alt: '' }), h('h1', {}, 'Ritmo'), h('p', { class: 'empty' }, 'Tu tiempo tiene ritmo.'),
+    h('p', { class: 'empty' }, 'Conecta Google para ver tus eventos y las citas que llegan a tu correo.'),
+    h('a', { href: '/auth/google' }, h('button', { class: 'primary' }, 'Continuar con Google'))));
+  const nav = [['home', ic(P.home), 'Home'], ['add', ic(P.plus), 'Añadir'], ['history', ic(P.hist), 'Historial'], ['profile', ic(P.user), 'Perfil']];
+  app.append(h('header', {}, h('h1', {}, h('img', { src: '/icon.svg', alt: '' }), 'Ritmo'), h('div', { class: 'hb' }, h('button', { id: 'sy', onclick: e => sync(e.target), 'aria-label': 'Sincronizar' }, ic(P.sync)), h('button', { id: 'ia', onclick: () => setChat(true), 'aria-label': 'Abrir asistente IA' }, 'IA'))),
+    h('main', {}, ...views[S.tab]()), S.msg ? h('div', { class: 'toast' }, S.msg) : '', chat(),
+    h('nav', {}, ...nav.map(([k, i, l]) => h('button', { class: (S.tab === k ? 'on ' : '') + (k === 'add' ? 'add' : ''), 'aria-label': l, onclick: async () => { S.tab = k; if (k === 'history') S.hist = await api('/api/history'); render(); } }, i, h('b', {}, l)))));
+}
+(async () => { try { S.me = await api('/api/me'); await load(); } catch {} render(); if (S.me && !S.events.length && !S.nots.length) sync(document.createElement('button')); })();
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+</script>
+</body>
+</html>
