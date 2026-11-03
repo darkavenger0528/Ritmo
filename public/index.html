@@ -306,13 +306,13 @@ function render() {
   const app = $('#app'); app.replaceChildren();
   if (!S.me) return app.append(h('div', { id: 'login' }, h('img', { src: '/icon.svg', alt: '' }), h('h1', {}, 'Ritmo'), h('p', { class: 'empty' }, 'Tu tiempo tiene ritmo.'),
     h('p', { class: 'empty' }, 'Conecta Google para ver tus eventos y las citas que llegan a tu correo.'),
-    h('a', { href: '/auth/google' }, h('button', { class: 'primary' }, 'Continuar con Google'))));
+    h('a', { href: '/auth/google' }, h('button', { class: 'primary' }, 'Continuar con Google')), S.demo ? h('a', { href: '/demo' }, h('button', { class: 'primary ghost' }, 'Ver demo sin iniciar sesión')) : ''));
   const nav = [['home', ic(P.home), 'Home'], ['add', ic(P.plus), 'Añadir'], ['history', ic(P.hist), 'Historial'], ['profile', ic(P.user), 'Perfil']];
   app.append(h('header', {}, h('h1', {}, h('img', { src: '/icon.svg', alt: '' }), 'Ritmo'), h('div', { class: 'hb' }, h('button', { id: 'sy', onclick: e => sync(e.target), 'aria-label': 'Sincronizar' }, ic(P.sync)), h('button', { id: 'ia', onclick: () => setChat(true), 'aria-label': 'Abrir asistente IA' }, 'IA'))),
     h('main', {}, ...views[S.tab]()), S.msg ? h('div', { class: 'toast' }, S.msg) : '', chat(),
     h('nav', {}, ...nav.map(([k, i, l]) => h('button', { class: (S.tab === k ? 'on ' : '') + (k === 'add' ? 'add' : ''), 'aria-label': l, onclick: async () => { S.tab = k; if (k === 'history') S.hist = await api('/api/history'); render(); } }, i, h('b', {}, l)))));
 }
-(async () => { try { S.me = await api('/api/me'); await load(); } catch {} render(); if (S.me && !S.events.length && !S.nots.length) sync(document.createElement('button')); })();
+(async () => { try { S.demo = (await api('/api/config')).demo; } catch {} try { S.me = await api('/api/me'); await load(); } catch {} render(); if (S.me && !S.events.length && !S.nots.length) sync(document.createElement('button')); })();
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
 </script>
 </body>

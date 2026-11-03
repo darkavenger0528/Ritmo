@@ -114,6 +114,8 @@ async function listAll(fn, params, key = 'items', cap = Infinity) {
 app.post('/api/sync', auth, async (req, res) => {
   const out = { events: 0, tasks: 0, mails: 0, warnings: [] };
   try {
+    const [me] = await q('SELECT google_id FROM users WHERE id=$1', [req.uid]);
+    if (me.google_id === 'demo') { await seedDemo(req.uid); return res.json({ events: 7, tasks: 4, mails: 2, warnings: [] }); }
     const c = await gClient(req.uid), now = Date.now();
     await q(`DELETE FROM events WHERE user_id=$1 AND source='calendar' AND cal IS NULL`, [req.uid]);
     // 1) Calendarios (todos: clases, personal, festivos, compartidos…)
@@ -333,6 +335,35 @@ app.get('/api/route/:id', auth, async (req, res) => {
         lines: tr.map(x => { const l = x.transitDetails.transitLine || {}; return { name: l.nameShort || l.name, agency: l.agencies?.[0]?.name }; }) };
     }) });
   } catch (err) { console.error('ruta:', err.message); res.json({ error: 'No pude consultar la ruta: ' + err.message }); }
+});
+
+// ---------- Modo demo (DEMO_MODE=true): entra sin Google y con datos de ejemplo ----------
+app.get('/api/config', (_q, r) => r.json({ demo: process.env.DEMO_MODE === 'true' }));
+async function seedDemo(uid) {
+  for (const t of ['events', 'notifications', 'usage']) await q(`DELETE FROM ${t} WHERE user_id=$1`, [uid]);
+  const now = Date.now(), H = 36e5, day = n => ymd(now + n * 864e5, 'America/Bogota') + 'T12:00:00Z';
+  const ev = [['Desarrollo cómputo_L510', 1.5, 'Clases', 'Clase', null], ['Redes cómputo_N407', 3.5, 'Clases', 'Clase', null],
+    ['Entrevista de trabajo · Bancolombia', 26, 'Personal', 'Entrevista', 'Carrera 7 #71-21, Bogotá'], ['Gestión de proyectos aula', 28, 'Clases', 'Clase', null],
+    ['Pago Spotify', 48, 'Personal', 'Pago', null], ['Cita odontología', 74, 'Personal', 'Cita', null]];
+  for (const [i, [t, h, cal, kind, loc]] of ev.entries())
+    await q(`INSERT INTO events(user_id,google_id,title,start_at,source,cal,kind,location) VALUES($1,$2,$3,$4,'calendar',$5,$6,$7)`, [uid, 'demo:' + i, t, new Date(now + h * H).toISOString(), cal, kind, loc]);
+  for (const [i, [t, d, st]] of [['Entrega 1 bitácora', -3, 'pendiente'], ['Taller de gestión', 0, 'pendiente'], ['Guía de redes', 1, 'pendiente'], ['Quiz de redes', -6, 'hecho']].entries())
+    await q(`INSERT INTO events(user_id,google_id,title,start_at,source,cal,all_day,status) VALUES($1,$2,$3,$4,'task','Mis tareas',true,$5)`, [uid, 'demo:t' + i, t, day(d), st]);
+  await q(`INSERT INTO events(user_id,google_id,title,start_at,source,cal,all_day) VALUES($1,'demo:b','Cumpleaños de Laura',$2,'calendar','Aniversarios',true)`, [uid, day(2)]);
+  for (const [i, [k, t, sn, fr]] of [['cita', 'Confirmación de tu cita con Odontosalud', 'Tu cita quedó agendada para el viernes a las 3:00 p. m.', 'Odontosalud <citas@odontosalud.co>'],
+    ['pago', 'Tu suscripción se renueva pronto', 'Se cobrarán $16.900 el próximo lunes.', 'Spotify <no-reply@spotify.com>']].entries())
+    await q(`INSERT INTO notifications(user_id,gmail_id,kind,title,snippet,from_addr,received_at) VALUES($1,$2,$3,$4,$5,$6,now())`, [uid, 'demo:n' + i, k, t, sn, fr]);
+  const d0 = ymd(now, 'America/Bogota'), d3 = ymd(now - 3 * 864e5, 'America/Bogota');
+  for (const [a, h0, h3] of [['Instagram', 85, 225], ['YouTube', 40, 150], ['WhatsApp', 25, 95]])
+    await q('INSERT INTO usage(user_id,app,day,minutes) VALUES($1,$2,$3,$4),($1,$2,$5,$6)', [uid, a, d0, h0, d3, h3]);
+}
+app.get('/demo', async (req, res) => {
+  if (process.env.DEMO_MODE !== 'true') return res.status(404).send('Modo demo desactivado');
+  const [u] = await q(`INSERT INTO users(google_id,email,name,home,campus) VALUES('demo','demo@ritmo.app','Invitado','Calle 100 #15-20, Bogotá','Universidad Nacional de Colombia, Bogotá')
+    ON CONFLICT(google_id) DO UPDATE SET home=EXCLUDED.home,campus=EXCLUDED.campus RETURNING id`);
+  await seedDemo(u.id);
+  res.cookie('t', jwt.sign({ uid: u.id }, JWT_SECRET, { expiresIn: '1d' }), { httpOnly: true, sameSite: 'lax', secure: prod, maxAge: 864e5 });
+  res.redirect('/');
 });
 
 app.listen(PORT, () => console.log(`Ritmo en ${BASE_URL || 'http://localhost:' + PORT} · sync v2 · IA: ${MODEL}`));
